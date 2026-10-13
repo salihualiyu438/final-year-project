@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Surveillance & Threat Detection Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700&family=Barlow+Condensed:wght@400;700;900&display=swap" rel="stylesheet"/>
+<style>
+/* ── CSS Variables ─────────────────────────────────────────────────────── */
+:root {
+  --bg:           #080c10;
+  --bg-panel:     #0d1117;
+  --bg-card:      #111820;
+  --border:       #1e2d3d;
+  --border-hot:   #ff3b3b;
+  --border-warn:  #ff8c00;
+  --accent:       #00d4ff;
+  --accent-dim:   #0a4a5a;
+  --green:        #00ff88;
+  --red:          #ff3b3b;
+  --orange:       #ff8c00;
+  --text:         #c8d8e8;
+  --text-dim:     #4a6070;
+  --text-bright:  #ffffff;
+  --font-mono:    'Share Tech Mono', monospace;
+  --font-ui:      'Barlow', sans-serif;
+  --font-display: 'Barlow Condensed', sans-serif;
+}
+
+/* ── Reset ─────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; overflow: hidden; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Scanline overlay ──────────────────────────────────────────────────── */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ── Top bar ───────────────────────────────────────────────────────────── */
+#topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  height: 52px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+#logo {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 900;
+  letter-spacing: 4px;
+  color: var(--text-bright);
+  text-transform: uppercase;
+}
+#logo span { color: var(--accent); }
+
+#topbar-meta {
+  display: flex;
+  gap: 28px;
+  align-items: center;
+}
+
+.meta-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.meta-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.meta-value {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--accent);
+}
+
+#status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+/* ── Main layout ───────────────────────────────────────────────────────── */
+#main {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  grid-template-rows: 1fr;
+  flex: 1;
+  overflow: hidden;
+  gap: 0;
+}
+
+/* ── Left — video + alert banner ───────────────────────────────────────── */
+#left-col {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--border);
+}
+
+/* Alert banner */
+#alert-banner {
+  height: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  transition: height 0.2s ease, background 0.2s ease;
+  flex-shrink: 0;
+}
+#alert-banner.active-high {
+  height: 48px;
+  background: rgba(255,59,59,0.15);
+  border-bottom: 2px solid var(--red);
+  color: var(--red);
+  animation: flash-high 0.5s infinite alternate;
+}
+#alert-banner.active-moderate {
+  height: 48px;
+  background: rgba(255,140,0,0.12);
+  border-bottom: 2px solid var(--orange);
+  color: var(--orange);
+}
+@keyframes flash-high {
+  from { background: rgba(255,59,59,0.10); }
+  to   { background: rgba(255,59,59,0.25); }
+}
+
+/* Video feed */
+#video-wrap {
+  flex: 1;
+  position: relative;
+  background: #000;
+  overflow: hidden;
+}
+#video-feed {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* ROI canvas overlay */
+#roi-image-wrap {
+  position: relative;
+  width: 100%;
+}
+.roi-image-wrap {
+  position: relative;
+  width: 100%;
+  background: #000;
+}
+.roi-image-wrap #video-feed {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+#roi-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  display: none;
+  z-index: 20;
+}
+#roi-canvas.active { display: block; }
+
+/* Video overlay labels */
+#vid-overlay {
+  position: absolute;
+  top: 10px; left: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+.vid-badge {
+  background: rgba(8,12,16,0.75);
+  border: 1px solid var(--border);
+  padding: 3px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent);
+  backdrop-filter: blur(4px);
+}
+
+/* Bottom bar under video */
+#video-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.btn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn.active { border-color: var(--orange); color: var(--orange); }
+.btn.danger { border-color: var(--red); color: var(--red); }
+.btn.confirm { border-color: var(--green); color: var(--green); }
+
+#roi-instructions {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-left: auto;
+}
+
+/* ── Right col ─────────────────────────────────────────────────────────── */
+#right-col {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-panel);
+}
+
+/* Panel shared styles */
+.panel {
+  border-bottom: 1px solid var(--border);
+  padding: 12px 14px;
+}
+.panel-title {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.panel-title::before {
+  content: '';
+  display: block;
+  width: 3px; height: 10px;
+  background: var(--accent);
+}
+
+/* Stats grid */
+#stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+}
+.stat-card .s-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.stat-card .s-value {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  color: var(--accent);
+  line-height: 1.1;
+  margin-top: 2px;
+}
+.stat-card .s-unit {
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+/* Class counters */
+#class-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.class-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.class-name {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  width: 72px;
+  color: var(--text);
+  flex-shrink: 0;
+}
+.class-bar-wrap {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+.class-bar {
+  height: 100%;
+  transition: width 0.3s ease;
+  width: 0%;
+}
+.class-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  width: 20px;
+  text-align: right;
+  color: var(--text-dim);
+}
+
+/* Alert log */
+#alert-log-wrap {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+#alert-log {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 0;
+}
+#alert-log::-webkit-scrollbar { width: 4px; }
+#alert-log::-webkit-scrollbar-track { background: transparent; }
+#alert-log::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+.alert-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 10px;
+  border-left: 3px solid transparent;
+  background: var(--bg-card);
+  animation: slide-in 0.2s ease;
+}
+@keyframes slide-in {
+  from { opacity: 0; transform: translateX(8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.alert-entry.HIGH     { border-color: var(--red); }
+.alert-entry.MODERATE { border-color: var(--orange); }
+
+.alert-entry .ae-time {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.alert-entry .ae-body { flex: 1; }
+.alert-entry .ae-level {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+.alert-entry.HIGH .ae-level     { color: var(--red); }
+.alert-entry.MODERATE .ae-level { color: var(--orange); }
+.alert-entry .ae-trigger {
+  font-size: 11px;
+  color: var(--text);
+  margin-top: 1px;
+}
+
+/* Model info panel */
+#model-info {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+#model-info span { color: var(--text); }
+
+/* Connection lost overlay */
+#conn-lost {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(8,12,16,0.85);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 16px;
+  font-family: var(--font-display);
+  font-size: 24px;
+  letter-spacing: 4px;
+  color: var(--red);
+}
+#conn-lost.show { display: flex; }
+ 
+.camera-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.camera-card{border:1px solid var(--border);border-radius:12px;padding:10px;background:rgba(255,255,255,.02)}
+.camera-card h3{margin:0 0 8px;font-size:13px}
+.camera-card img{width:100%;display:block;background:#000;border-radius:7px}
+.camera-card input,.camera-card textarea{width:100%;background:#08111d;border:1px solid var(--border);color:var(--text);border-radius:7px;padding:7px;margin-top:4px}
+.camera-card textarea{min-height:55px;resize:vertical}
+.camera-card label{display:block;font-size:10px;color:var(--text-dim);margin-top:7px}
+.cam-status{font-size:9px;color:var(--text-dim);font-family:var(--font-mono);margin-top:7px}
+@media(max-width:800px){.camera-grid{grid-template-columns:1fr}}
+ 
+#alert-preferences-panel{display:block!important}
+.alert-pref-list{display:flex;flex-direction:column;gap:6px}
+.alert-pref{display:flex;align-items:center;justify-content:space-between;padding:7px 9px;border:1px solid var(--border);border-radius:7px;background:rgba(255,255,255,.02)}
+.alert-pref label{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px}
+.alert-pref input[type=checkbox]{width:16px;height:16px;accent-color:#00d4ff}
+".alert-pref .forced{font-size:8px;font-family:var(--font-mono);letter-spacing:.5px;color:var(--orange)}
+.feature-list{display:flex;flex-direction:column;gap:6px}
+.feature-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 9px;border:1px solid var(--border);border-radius:7px;background:rgba(255,255,255,.02)}
+.feature-row label{display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px}
+.feature-row input[type=checkbox]{width:16px;height:16px;accent-color:#00d4ff}
+.feature-state{font-size:8px;font-family:var(--font-mono);letter-spacing:.5px;color:var(--text-dim)}
+
+/* Keep the right-side operator controls inside the desktop viewport.
+   The controls scroll independently, so browser zoom is not required. */
+.scrollable-controls{
+  max-height:calc(100vh - 28px);
+  overflow-y:auto;
+  overflow-x:hidden;
+  padding-right:10px;
+  scrollbar-gutter:stable;
+  min-height:0;
+}
+.scrollable-controls::-webkit-scrollbar{width:10px}
+@media(max-width:900px){
+  .scrollable-controls{max-height:none;overflow:visible;padding-right:0}
+}
+
+
+/* ===== OPERATOR DESKTOP SCROLL FIX ===== */
+html, body {
+  height: 100%;
+  min-height: 0;
+}
+body {
+  overflow: hidden;
+}
+.dashboard-container,
+.dashboard-layout,
+.app-shell,
+.main-layout,
+.content-layout,
+.page-layout {
+  min-height: 0 !important;
+}
+@media (min-width: 901px) {
+  /* Any right-side control column becomes a true independent scroll region. */
+  aside,
+  .sidebar,
+  .right-panel,
+  .control-panel,
+  .controls-panel,
+  .settings-panel,
+  .operator-controls,
+  .right-column,
+  .controls-column,
+  .settings-column {
+    min-height: 0 !important;
+    max-height: calc(100vh - 24px) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain;
+    scrollbar-width: auto;
+    scrollbar-gutter: stable;
+  }
+
+  /* If the page uses a two-column flex/grid wrapper, allow its children to shrink. */
+  [class*="grid"], [class*="layout"], [class*="columns"], [class*="content"] {
+    min-height: 0;
+  }
+}
+@media (max-width: 900px) {
+  body { overflow: auto; }
+}
+
+
+@media (min-width: 901px) {
+  .operator-scroll-region {
+    height: calc(100vh - 24px);
+    max-height: calc(100vh - 24px);
+    min-height: 0;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    padding-right: 10px;
+    box-sizing: border-box;
+  }
+}
+
+</style>
+</head>
+<body><button id="logout-btn" style="position:fixed;right:12px;top:12px;z-index:9999;padding:8px 12px;border-radius:8px;cursor:pointer">Logout</button>
+
+<!-- ── Top bar ───────────────────────────────────────────────────────────── -->
+<div id="topbar">
+  <div id="logo">Sentinel<span>AI</span></div>
+  <div id="topbar-meta">
+    <div class="meta-item">
+      <span class="meta-label">Stream</span>
+      <span class="meta-value" id="tb-stream">—</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Uptime</span>
+      <span class="meta-value" id="tb-uptime">00:00:00</span>
+    </div>
+    <div class="meta-item">
+      <span class="meta-label">Status</span>
+      <div id="status-dot"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Main layout ───────────────────────────────────────────────────────── -->
+<div id="main">
+
+  <!-- Left: video -->
+  <div id="left-col">
+    <div id="alert-banner">
+      <span id="banner-icon">⚠</span>
+      <span id="banner-text">ALERT</span>
+    </div>
+
+    <div id="video-wrap">
+      <div id="camera-live-grid" class="camera-grid">
+        <div class="camera-card roi-target" id="camera-1-card">
+          <h3 id="live-camera-1-title">Camera 1</h3>
+          <div class="roi-image-wrap">
+            <img id="video-feed" src="/video_feed?camera_id=camera_1" alt="Camera 1 Live Feed"/>
+            <canvas id="roi-canvas"></canvas>
+          </div>
+        </div>
+        <div class="camera-card"><h3 id="live-camera-2-title">Camera 2</h3><img id="video-feed-camera_2" src="/video_feed?camera_id=camera_2" alt="Camera 2 Live Feed"/></div>
+      </div>
+      <div id="vid-overlay">
+        <div class="vid-badge" id="fps-badge">FPS: --</div>
+        <div class="vid-badge" id="inf-badge">INF: -- ms</div>
+        <div class="vid-badge" id="det-badge">DET: 0</div>
+      </div>
+    </div>
+
+    <div id="video-controls">
+      <button class="btn" id="btn-draw-roi" onclick="startROI()">Draw ROI Zone</button>
+      <button class="btn confirm" id="btn-confirm-roi" style="display:none" onclick="confirmROI()">Confirm Zone</button>
+      <button class="btn danger"  id="btn-cancel-roi"  style="display:none" onclick="cancelROI()">Cancel</button>
+      <button class="btn danger"  id="btn-reset-roi"   onclick="resetROI()">Reset ROI</button>
+      <span id="roi-instructions"></span>
+    </div>
+  </div>
+
+  <!-- Right: panels -->
+  <div id="right-col">
+
+    <div class="operator-scroll-region"><!-- Alert trigger selection -->
+    <div class="panel" id="alert-preferences-panel">
+      <div class="panel-title">Alert Trigger Selection</div>
+      <div style="font-size:10px;color:var(--text-dim);font-family:var(--font-mono);margin-bottom:9px;">
+        Select which detected classes may trigger alerts.
+      </div>
+      <div id="alert-preferences"></div>
+      <button class="btn confirm" id="save-alert-preferences" style="margin-top:10px;width:100%;">
+        Apply Alert Settings
+      </button>
+      <div id="alert-preferences-status" style="font-size:10px;color:var(--text-dim);font-family:var(--font-mono);margin-top:7px;"></div>
+    </div>
+
+    <!-- Optional processing features -->
+    <div class="panel" id="feature-flags-panel">
+      <div class="panel-title">Optional Processing Features</div>
+      <div style="font-size:10px;color:var(--text-dim);font-family:var(--font-mono);margin-bottom:9px;">
+        These features improve false-positive control/performance. Each can be switched independently without changing the trained models.
+      </div>
+      <div id="feature-flags"></div>
+      <button class="btn confirm" id="save-feature-flags" style="margin-top:10px;width:100%;">
+        Apply Feature Settings
+      </button>
+      <div id="feature-flags-status" style="font-size:10px;color:var(--text-dim);font-family:var(--font-mono);margin-top:7px;"></div>
+    </div>
+
+    <!-- Camera configuration -->
+    <div class="panel" id="camera-config-panel">
+      <div class="panel-title">Camera Configuration</div>
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:9px">
+        Configure up to two camera streams. Each camera runs independently; a failed camera will not stop the other.
+      </div>
+      <div id="camera-config-grid" class="camera-grid"></div>
+      <button class="btn confirm" id="save-camera-config" style="width:100%;margin-top:10px;">Save Camera Settings</button>
+      <div id="camera-config-status" style="font-size:10px;color:var(--text-dim);font-family:var(--font-mono);margin-top:7px;"></div>
+    </div>
+
+    <!-- System stats -->
+    <div class="panel">
+      <div class="panel-title">System Stats</div>
+      <div id="stats-grid">
+        <div class="stat-card">
+          <div class="s-label">Display FPS</div>
+          <div class="s-value" id="stat-fps">--<span class="s-unit"> fps</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="s-label">Inference</div>
+          <div class="s-value" id="stat-inf">--<span class="s-unit"> ms</span></div>
+        </div>
+        <div class="stat-card">
+          <div class="s-label">Frames Run</div>
+          <div class="s-value" id="stat-total">--</div>
+        </div>
+        <div class="stat-card">
+          <div class="s-label">Alerts</div>
+          <div class="s-value" id="stat-alerts">0</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Class counters -->
+    <div class="panel">
+      <div class="panel-title">Detections This Frame</div>
+      <div id="class-grid">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+
+    </div><!-- Model info -->
+    <div class="panel">
+      <div class="panel-title">Model Info</div>
+      <div id="model-info">
+        <div>Model 1: <span id="mi-model">—</span></div>
+        <div>Model 1 Conf: <span id="mi-conf">—</span></div>
+        <div>Model 1 Size: <span id="mi-imgsz">—</span></div>
+        <div>Model 2: <span id="mi-model2">—</span></div>
+        <div>Model 2 Size: <span id="mi-imgsz2">—</span></div>
+      </div>
+    </div>
+
+    <!-- Alert log -->
+    <div class="panel" style="flex:1;display:flex;flex-direction:column;overflow:hidden;border-bottom:none;">
+      <div class="panel-title">Alert Log</div>
+      <div id="alert-log-wrap">
+        <div id="alert-log">
+          <div style="color:var(--text-dim);font-family:var(--font-mono);font-size:11px;padding:6px 10px;">
+            No alerts yet…
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Connection lost overlay -->
+<div id="conn-lost">
+  <span>⚠ CONNECTION LOST</span>
+  <span style="font-size:13px;letter-spacing:2px;color:var(--text-dim)">Reconnecting…</span>
+</div>
+
+<!-- Hidden audio elements -->
+<audio id="snd-high"     src="/static/sounds/alert_high.wav"     preload="auto"></audio>
+<audio id="snd-moderate" src="/static/sounds/alert_moderate.wav" preload="auto"></audio>
+
+<script>
+const _fetch=window.fetch; window.fetch=async(...args)=>{const r=await _fetch(...args); if(r.status===401){location.href="/login";} return r;};
+
+// ── Config ────────────────────────────────────────────────────────────────
+const CLASS_COLORS = {
+  weapon:    '#ff3b3b',
+  mask:      '#cc2222',
+  person:    '#ff8c00',
+  animal:    '#00cc66',
+  vehicle:   '#00aacc',
+  personnel: '#00ff88',
+};
+const MAX_BAR_COUNT = 5;   // count above this = full bar
+
+// ── State ─────────────────────────────────────────────────────────────────
+let alertCount   = 0;
+let startTime    = Date.now();
+let activeAlert  = null;
+let alertTimeout = null;
+
+// ── Uptime counter ────────────────────────────────────────────────────────
+setInterval(() => {
+  const s  = Math.floor((Date.now() - startTime) / 1000);
+  const hh = String(Math.floor(s / 3600)).padStart(2, '0');
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+  const ss = String(s % 60).padStart(2, '0');
+  document.getElementById('tb-uptime').textContent = `${hh}:${mm}:${ss}`;
+}, 1000);
+
+// ── Build class bars ──────────────────────────────────────────────────────
+function buildClassGrid(counts) {
+  const grid = document.getElementById('class-grid');
+  grid.innerHTML = '';
+  for (const [cls, count] of Object.entries(counts)) {
+    const color = CLASS_COLORS[cls] || '#aaa';
+    const pct   = Math.min((count / MAX_BAR_COUNT) * 100, 100);
+    grid.innerHTML += `
+      <div class="class-row">
+        <div class="class-name">${cls}</div>
+        <div class="class-bar-wrap">
+          <div class="class-bar" style="width:${pct}%;background:${color}"></div>
+        </div>
+        <div class="class-count" style="color:${count > 0 ? color : 'var(--text-dim)'}">${count}</div>
+      </div>`;
+  }
+}
+
+// ── Stats update ──────────────────────────────────────────────────────────
+function updateStats(data) {
+  document.getElementById('stat-fps').innerHTML   = `${data.fps}<span class="s-unit"> fps</span>`;
+  document.getElementById('stat-inf').innerHTML   = `${data.inf_ms}<span class="s-unit"> ms</span>`;
+  document.getElementById('stat-total').textContent = data.total_inferred;
+  document.getElementById('fps-badge').textContent  = `FPS: ${data.fps}`;
+  document.getElementById('inf-badge').textContent  = `INF: ${data.inf_ms} ms`;
+  document.getElementById('det-badge').textContent  = `DET: ${data.detection_count}`;
+  if (data.class_counts) buildClassGrid(data.class_counts);
+}
+
+// ── Alert handling ────────────────────────────────────────────────────────
+function triggerAlert(data) {
+  alertCount++;
+  document.getElementById('stat-alerts').textContent = alertCount;
+
+  // Banner
+  const banner = document.getElementById('alert-banner');
+  document.getElementById('banner-text').textContent =
+    `${data.level} ALERT  |  ${data.trigger}`;
+  banner.className = `active-${data.level.toLowerCase()}`;
+
+  clearTimeout(alertTimeout);
+  alertTimeout = setTimeout(() => { banner.className = ''; }, 6000);
+
+  // Sound
+  const snd = document.getElementById(
+    data.level === 'HIGH' ? 'snd-high' : 'snd-moderate'
+  );
+  if (snd) { snd.currentTime = 0; snd.play().catch(() => {}); }
+
+  // Log entry
+  addAlertEntry(data);
+}
+
+function addAlertEntry(data) {
+  const log = document.getElementById('alert-log');
+
+  // Remove placeholder
+  const placeholder = log.querySelector('[data-placeholder]');
+  if (placeholder) placeholder.remove();
+
+  const entry = document.createElement('div');
+  entry.className = `alert-entry ${data.level}`;
+  entry.innerHTML = `
+    <div class="ae-time">${data.time}</div>
+    <div class="ae-body">
+      <div class="ae-level">${data.level}</div>
+      <div class="ae-trigger">${data.trigger}</div>
+    </div>`;
+  log.prepend(entry);
+
+  // Keep max 100 entries visible
+  while (log.children.length > 100) log.removeChild(log.lastChild);
+}
+
+// ── Alert trigger preferences ─────────────────────────────────────────────
+const ALERT_LABELS = {
+  person: 'Person',
+  animal: 'Animal',
+  vehicle: 'Vehicle',
+  large_gun: 'Large gun (Model 2)',
+  short_gun: 'Short gun (Model 2)',
+  'matchet/knife': 'Matchet / knife (Model 2)'
+};
+const ALWAYS_ALERT = new Set(['large_gun','short_gun','matchet/knife']);
+
+function renderAlertPreferences(data){
+  const el = document.getElementById('alert-preferences');
+  if(!el) return;
+  const selected = new Set(data.selected || []);
+  const selectable = data.selectable || Object.keys(ALERT_LABELS);
+  const all = [...selectable, ...[...ALWAYS_ALERT]].filter((v,i,a)=>a.indexOf(v)===i);
+  el.innerHTML = '<div class="alert-pref-list">' + all.map(cls => {
+    const forced = ALWAYS_ALERT.has(cls);
+    return `<div class="alert-pref ${forced?'locked':''}">
+      <label>
+        <input type="checkbox" data-alert-class="${cls}" ${selected.has(cls)?'checked':''} ${forced?'disabled':''}>
+        <span>${ALERT_LABELS[cls] || cls}</span>
+      </label>
+      ${forced ? '<span class="forced">ALWAYS ON</span>' : ''}
+    </div>`;
+  }).join('') + '</div>';
+}
+
+async function loadAlertPreferences(){
+  try{
+    const r = await fetch('/api/alert_preferences');
+    if(!r.ok) return;
+    renderAlertPreferences(await r.json());
+  }catch{}
+}
+
+async function saveAlertPreferences(){
+  const boxes = document.querySelectorAll('[data-alert-class]:not(:disabled)');
+  const selected = [...boxes].filter(x=>x.checked).map(x=>x.dataset.alertClass);
+  // Critical classes are included server-side even if omitted here.
+  const status = document.getElementById('alert-preferences-status');
+  try{
+    const r = await fetch('/api/alert_preferences',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({selected})
+    });
+    const data = await r.json();
+    if(!r.ok) throw new Error(data.detail || 'Failed');
+    renderAlertPreferences(data);
+    status.textContent = 'Alert settings applied.';
+    status.style.color = 'var(--green)';
+    setTimeout(()=>status.textContent='',2500);
+  }catch(e){
+    status.textContent = 'Failed to apply alert settings.';
+    status.style.color = 'var(--red)';
+  }
+}
+
+// ── Optional processing features ──────────────────────────────────────────
+const FEATURE_LABELS = {
+  motion_gate: 'Motion / scene-change gating',
+  temporal_filter: 'Temporal matching / multi-frame confirmation',
+  context_filter: 'Context-aware false-positive filtering'
+};
+
+function renderFeatureFlags(data){
+  const el = document.getElementById('feature-flags');
+  if(!el) return;
+  const features = data.features || {};
+  el.innerHTML = '<div class="feature-list">' +
+    Object.entries(FEATURE_LABELS).map(([key,label]) => `
+      <div class="feature-row">
+        <label>
+          <input type="checkbox" data-feature="${key}" ${features[key] ? 'checked' : ''}>
+          <span>${label}</span>
+        </label>
+        <span class="feature-state">${features[key] ? 'ON' : 'OFF'}</span>
+      </div>`).join('') + '</div>';
+}
+
+async function loadFeatureFlags(){
+  try{
+    const r = await fetch('/api/feature_flags');
+    if(!r.ok) return;
+    renderFeatureFlags(await r.json());
+  }catch{}
+}
+
+async function saveFeatureFlags(){
+  const status = document.getElementById('feature-flags-status');
+  const features = {};
+  document.querySelectorAll('[data-feature]').forEach(box => {
+    features[box.dataset.feature] = box.checked;
+  });
+  try{
+    const r = await fetch('/api/feature_flags',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({features})
+    });
+    const data = await r.json();
+    if(!r.ok) throw new Error(data.detail || 'Failed');
+    renderFeatureFlags(data);
+    status.textContent = 'Feature settings applied.';
+    status.style.color = 'var(--green)';
+    setTimeout(()=>status.textContent='',2500);
+  }catch(e){
+    status.textContent = 'Failed to apply feature settings.';
+    status.style.color = 'var(--red)';
+  }
+}
+
+// ── WebSocket ─────────────────────────────────────────────────────────────
+function connectWS() {
+  const ws = new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws/events`);
+
+  ws.onopen = () => {
+    document.getElementById('conn-lost').classList.remove('show');
+    document.getElementById('status-dot').style.background = 'var(--green)';
+    // Keep-alive ping
+    setInterval(() => { if (ws.readyState === 1) ws.send('ping'); }, 20000);
+  };
+
+  ws.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    if (data.type === 'stats') updateStats(data);
+    if (data.type === 'alert') triggerAlert(data);
+  };
+
+  ws.onclose = () => {
+    document.getElementById('conn-lost').classList.add('show');
+    document.getElementById('status-dot').style.background = 'var(--red)';
+    setTimeout(connectWS, 3000);
+  };
+}
+
+// ── Load initial stats + model info ──────────────────────────────────────
+async function loadInitialData() {
+  try {
+    const r    = await fetch('/api/stats');
+    const data = await r.json();
+    document.getElementById('tb-stream').textContent =
+      data.stream.length > 30 ? '…' + data.stream.slice(-28) : data.stream;
+    document.getElementById('mi-model').textContent = data.model.split(/[\\/]/).pop();
+    document.getElementById('mi-conf').textContent  = data.conf_threshold;
+    document.getElementById('mi-imgsz').textContent = (data.model1_imgsz || data.imgsz) + 'px';
+    const m2 = data.model2 || 'models/model2.pt';
+    document.getElementById('mi-model2').textContent = m2.split(/[\\/]/).pop();
+    document.getElementById('mi-imgsz2').textContent = (data.model2_imgsz || 1024) + 'px';
+    if (data.class_counts) buildClassGrid(data.class_counts);
+  } catch {}
+
+  // Load alert history
+  try {
+    const r2   = await fetch('/api/alert_history');
+    const hist = await r2.json();
+    hist.forEach(a => addAlertEntry(a));
+    alertCount = hist.length;
+    document.getElementById('stat-alerts').textContent = alertCount;
+  } catch {}
+}
+
+// ── Camera configuration ─────────────────────────────────────────────────
+function camEsc(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+function renderCameras(cameras){
+  const grid=document.getElementById('camera-config-grid'); if(!grid)return;
+  grid.innerHTML=(cameras||[]).map(c=>`
+    <div class="camera-card" data-camera-card="${camEsc(c.id)}">
+      <h3>${c.id==='camera_1'?'Camera 1':'Camera 2'}</h3>
+      <label><input type="checkbox" data-cam-enabled ${c.enabled?'checked':''}> Enable camera</label>
+      <label>Name<input data-cam-name value="${camEsc(c.name||'')}"></label>
+      <label>RTSP / video source<input data-cam-url value="${camEsc(c.url||'')}" placeholder="rtsp://..."></label>
+      <label>Location<input data-cam-location value="${camEsc(c.location||'')}" placeholder="e.g. Main Gate"></label>
+      <label>Description<textarea data-cam-description>${camEsc(c.description||'')}</textarea></label>
+      <div class="cam-status">${c.running?'RUNNING':'NOT RUNNING'}${c.capture_stats?` • reads ${c.capture_stats.frames_read} • reconnects ${c.capture_stats.reconnects}`:''}</div>
+    </div>`).join('');
+  (cameras||[]).forEach(c=>{
+    const title=document.getElementById(`live-${c.id}-title`);
+    if(title) title.textContent=`${c.name||c.id} — ${c.location||'Location not assigned'}`;
+  });
+}
+async function loadCameras(){
+  try{const r=await fetch('/api/cameras');if(r.ok)renderCameras(await r.json());}catch(e){}
+}
+async function saveCameras(){
+  const status=document.getElementById('camera-config-status');
+  const cameras=[...document.querySelectorAll('[data-camera-card]')].map(card=>({
+    id:card.dataset.cameraCard,
+    enabled:card.querySelector('[data-cam-enabled]').checked,
+    name:card.querySelector('[data-cam-name]').value,
+    url:card.querySelector('[data-cam-url]').value,
+    location:card.querySelector('[data-cam-location]').value,
+    description:card.querySelector('[data-cam-description]').value
+  }));
+  try{
+    const r=await fetch('/api/cameras',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cameras})});
+    const data=await r.json();
+    status.textContent=data.message||'Camera settings saved.';
+    renderCameras(data.cameras||cameras);
+  }catch(e){status.textContent='Failed to save camera settings.';}
+}
+document.getElementById('save-camera-config')?.addEventListener('click',saveCameras);
+loadCameras();
+
+// ── ROI Drawing ───────────────────────────────────────────────────────────
+let roiMode   = false;
+let roiPoints = [];
+let roiCtx    = null;
+
+function startROI() {
+  roiMode   = true;
+  roiPoints = [];
+  const canvas   = document.getElementById('roi-canvas');
+  const imageWrap = document.querySelector('.roi-image-wrap');
+  canvas.width   = imageWrap.clientWidth;
+  canvas.height  = imageWrap.clientHeight;
+  roiCtx = canvas.getContext('2d');
+  canvas.classList.add('active');
+  document.getElementById('btn-draw-roi').style.display    = 'none';
+  document.getElementById('btn-confirm-roi').style.display = 'inline-block';
+  document.getElementById('btn-cancel-roi').style.display  = 'inline-block';
+  document.getElementById('roi-instructions').textContent  =
+    'Click to place points. Confirm when done.';
+
+  canvas.onclick = (e) => {
+    if (!roiMode) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    roiPoints.push({ x, y });
+    drawROIPreview();
+  };
+}
+
+function drawROIPreview() {
+  roiCtx.clearRect(0, 0, roiCtx.canvas.width, roiCtx.canvas.height);
+  if (roiPoints.length < 1) return;
+
+  roiCtx.strokeStyle = '#00d4ff';
+  roiCtx.fillStyle   = 'rgba(0,212,255,0.08)';
+  roiCtx.lineWidth   = 2;
+  roiCtx.setLineDash([6, 3]);
+
+  roiCtx.beginPath();
+  roiCtx.moveTo(roiPoints[0].x, roiPoints[0].y);
+  roiPoints.slice(1).forEach(p => roiCtx.lineTo(p.x, p.y));
+  if (roiPoints.length > 2) roiCtx.closePath();
+  roiCtx.stroke();
+  roiCtx.fill();
+
+  roiPoints.forEach((p, i) => {
+    roiCtx.beginPath();
+    roiCtx.arc(p.x, p.y, 5, 0, Math.PI * 2);
+    roiCtx.fillStyle = i === 0 ? '#00ff88' : '#00d4ff';
+    roiCtx.fill();
+  });
+}
+
+async function confirmROI() {
+  if (roiPoints.length < 3) {
+    document.getElementById('roi-instructions').textContent = 'Need at least 3 points!';
+    return;
+  }
+
+  // Scale points to actual video frame dimensions
+  const img    = document.getElementById('video-feed');
+  const canvas = document.getElementById('roi-canvas');
+  const scaleX = (img.naturalWidth || img.clientWidth) / canvas.width || 1;
+  const scaleY = (img.naturalHeight || img.clientHeight) / canvas.height || 1;
+  const scaled = roiPoints.map(p => ({ x: Math.round(p.x * scaleX), y: Math.round(p.y * scaleY) }));
+
+  await fetch('/api/roi', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ camera_id: 'camera_1', points: scaled }),
+  });
+  cancelROI();
+}
+
+function cancelROI() {
+  roiMode = false;
+  const canvas = document.getElementById('roi-canvas');
+  canvas.classList.remove('active');
+  if (roiCtx) roiCtx.clearRect(0, 0, canvas.width, canvas.height);
+  canvas.onclick = null;
+  document.getElementById('btn-draw-roi').style.display    = 'inline-block';
+  document.getElementById('btn-confirm-roi').style.display = 'none';
+  document.getElementById('btn-cancel-roi').style.display  = 'none';
+  document.getElementById('roi-instructions').textContent  = '';
+}
+
+async function resetROI() {
+  await fetch('/api/reset_roi', { method: 'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({camera_id:'camera_1'}) });
+  cancelROI();
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+loadInitialData();
+loadAlertPreferences();
+loadFeatureFlags();
+document.getElementById('save-alert-preferences')?.addEventListener('click', saveAlertPreferences);
+document.getElementById('save-feature-flags')?.addEventListener('click', saveFeatureFlags);
+connectWS();
+
+document.getElementById('logout-btn')?.addEventListener('click', async()=>{await fetch('/api/auth/logout',{method:'POST'});location.href='/login';});
+</script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "camera_1": {
+    "id": "camera_1",
+    "name": "camera 1",
+    "location": "Main Perimeter",
+    "description": "Primary surveillance camera",
+    "url": "C:\\Users\\User\\Documents\\final_year_project\\final year project online videos\\armed\\youtube\\WATCH _ Guns blazing_ Armed gang rob motorist of R450 000 in attack on Gauteng_s N4(1080P_HD).mp4",
+    "enabled": true
+  },
+  "camera_2": {
+    "id": "camera_2",
+    "name": "Camera 2",
+    "location": "",
+    "description": "Secondary surveillance camera",
+    "url": "rtsp://admin:admin@192.168.0.176:554/12",
+    "enabled": false
+  }
+}

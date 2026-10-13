@@ -1,0 +1,12 @@
+# Phase 6 named Cloudflare Tunnel example.
+# Replace the placeholders after creating a named tunnel.
+#
+# This file is a TEMPLATE only. Do not commit tunnel credentials to Git.
+
+tunnel: YOUR-TUNNEL-UUID
+credentials-file: C:\Users\YOUR_USER\.cloudflared\YOUR-TUNNEL-UUID.json
+
+ingress:
+  - hostname: surveillance.example.com
+    service: http://127.0.0.1:8000
+  - service: http_status:404

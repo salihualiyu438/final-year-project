@@ -1,0 +1,70 @@
+
+# Private Web Push key and registered phone subscriptions
+data/vapid_private.pem
+data/push_subscriptions.json
+data/push_subscriptions.tmp
+
+test.py
+
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*.pyd
+
+# Virtual environments
+venv/
+.venv/
+env/
+final_year_app_env/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.json
+credentials.json
+
+# Trained model weights
+models/*.pt
+*.pt
+*.pth
+*.onnx
+*.engine
+*.xml
+*.bin
+
+# Incident evidence videos
+media/incidents/
+
+# Keep the directory structure if needed
+!media/incidents/.gitkeep
+# media/*.mp4
+# media/*.jpeg
+# media/*.jpg
+
+# video files
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.jpg
+*.jpeg
+
+# Push subscriptions and local databases
+push_subscriptions.json
+db.sqlite3
+*.db
+*.sqlite3
+
+# Logs and temporary files
+*.log
+logs/
+temp/
+tmp/
+
+# Generated files
+.DS_Store
+Thumbs.db
